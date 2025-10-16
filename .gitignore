@@ -1,0 +1,26 @@
+# === Python ==
+__pycache__/
+*.py[cod]
+*$py.class
+
+# === Temp file===
+*.log
+*.tmp
+*.swp
+*.swo
+
+# === VSCode / IntelliJ  ===
+.vscode/
+.idea/
+
+# === System file ===
+.DS_Store
+Thumbs.db
+
+# === virtual environment ===
+venv/
+.env/
+
+# === outputs ===
+output/
+results/
