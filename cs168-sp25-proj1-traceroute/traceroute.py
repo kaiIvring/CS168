@@ -72,7 +72,10 @@ class ICMP:
     cksum: int
 
     def __init__(self, buffer: bytes):
-        pass  # TODO
+        b = ''.join(format(byte, '08b') for byte in [*buffer])
+        self.type = int(b[0:8], 2)
+        self.code = int(b[8:16], 2)
+        self.cksum = int(b[16:32], 2)
 
     def __str__(self) -> str:
         return f"ICMP (type {self.type}, code {self.code}, " + \
@@ -91,7 +94,11 @@ class UDP:
     cksum: int
 
     def __init__(self, buffer: bytes):
-        pass  # TODO
+        b = ''.join(format(byte, '08b') for byte in [*buffer])
+        self.src_port = int(b[0:16], 2)
+        self.dst_port = int(b[16:32], 2)
+        self.len = int(b[32:48], 2)
+        self.cksum = int(b[48:64], 2)
 
     def __str__(self) -> str:
         return f"UDP (src_port {self.src_port}, dst_port {self.dst_port}, " + \
@@ -133,7 +140,11 @@ def traceroute(sendsock: util.Socket, recvsock: util.Socket, ip: str) \
             # Print out the packet
             print(f"{i} Packet bytes: {buf.hex()}")
             ip_header = IPv4(buf[:20])
+            icmp_header = ICMP(buf[20:28])
+            udp_header = UDP(buf[48:56])
             print(ip_header)
+            print(icmp_header)
+            print(udp_header)
             print(f"Packet is from IP: {address[0]}")
             print(f"Packet is from port: {address[1]}")
         else:
