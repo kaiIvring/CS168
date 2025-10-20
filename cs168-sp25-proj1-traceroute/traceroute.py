@@ -2,8 +2,8 @@ import util
 
 # Your program should send TTLs in the range [1, TRACEROUTE_MAX_TTL] inclusive.
 # Technically IPv4 supports TTLs up to 255, but in practice this is excessive.
-# Most traceroute implementations cap at approximately 30.  The unit tests
-# assume you don't change this number.
+# Most traceroute implementations cap at approximately 30.  
+# The unit tests assume you don't change this number.
 TRACEROUTE_MAX_TTL = 30
 
 # Cisco seems to have standardized on UDP ports [33434, 33464] for traceroute.
@@ -13,15 +13,16 @@ TRACEROUTE_MAX_TTL = 30
 # range seems to give more interesting results.
 TRACEROUTE_PORT_NUMBER = 33434  # Cisco traceroute port number.
 
-# Sometimes packets on the internet get dropped.  PROBE_ATTEMPT_COUNT is the
-# maximum number of times your traceroute function should attempt to probe a
+# Sometimes packets on the internet get dropped.  
+# PROBE_ATTEMPT_COUNT is the maximum number of times 
+# your traceroute function should attempt to probe a
 # single router before giving up and moving on.
 PROBE_ATTEMPT_COUNT = 3
 
 class IPv4:
-    # Each member below is a field from the IPv4 packet header.  They are
-    # listed below in the order they appear in the packet.  All fields should
-    # be stored in host byte order.
+    # Each member below is a field from the IPv4 packet header.  
+    # They are listed below in the order they appear in the packet.  
+    # All fields should be stored in host byte order.
     #
     # You should only modify the __init__() method of this class.
     version: int
@@ -62,11 +63,13 @@ class IPv4:
 
 
 class ICMP:
-    # Each member below is a field from the ICMP header.  They are listed below
-    # in the order they appear in the packet.  All fields should be stored in
-    # host byte order.
+    # Each member below is a field from the ICMP header. 
+    # They are listed below in the order they appear in the packet. 
+    # All fields should be stored in host byte order.
     #
     # You should only modify the __init__() function of this class.
+
+    # type3: destination unreachable; type11: Time-to-live exceeded
     type: int
     code: int
     cksum: int
@@ -83,9 +86,9 @@ class ICMP:
 
 
 class UDP:
-    # Each member below is a field from the UDP header.  They are listed below
-    # in the order they appear in the packet.  All fields should be stored in
-    # host byte order.
+    # Each member below is a field from the UDP header. 
+    # They are listed below in the order they appear in the packet.  
+    # All fields should be stored in host byte order.
     #
     # You should only modify the __init__() function of this class.
     src_port: int
@@ -104,7 +107,6 @@ class UDP:
         return f"UDP (src_port {self.src_port}, dst_port {self.dst_port}, " + \
             f"len {self.len}, cksum 0x{self.cksum:x})"
 
-# TODO feel free to add helper functions if you'd like
 
 def traceroute(sendsock: util.Socket, recvsock: util.Socket, ip: str) \
         -> list[list[str]]:
@@ -125,40 +127,35 @@ def traceroute(sendsock: util.Socket, recvsock: util.Socket, ip: str) \
     If no routers were found, the ith list can be empty.  
     If `ip` is discovered, it should be included as the final element in the list.
     """
+    result = [[] for _ in range(TRACEROUTE_MAX_TTL)]
+    done = False
 
-    # TODO Add your implementation
-    # for ttl in range(1, TRACEROUTE_MAX_TTL+1):
-    #     util.print_result([], ttl)
-    # return []
+    for ttl in range(1, TRACEROUTE_MAX_TTL + 1):
+        for attempt in range(PROBE_ATTEMPT_COUNT):
+            sendsock.set_ttl(ttl)
+            sendsock.sendto("whatsup?".encode(), (ip, TRACEROUTE_PORT_NUMBER))
 
-    for i in range(1, TRACEROUTE_MAX_TTL + 1):
-        sendsock.set_ttl(i)
-        sendsock.sendto("whatsup?".encode(), (ip, 33434))
-        if recvsock.recv_select():
-            buf, address = recvsock.recvfrom()
+            if recvsock.recv_select():
+                buf, address = recvsock.recvfrom()
 
-            # Print out the packet
-            print(f"{i} Packet bytes: {buf.hex()}")
-            ip_header = IPv4(buf[:20])
-            icmp_header = ICMP(buf[20:28])
-            udp_header = UDP(buf[48:56])
-            print(ip_header)
-            print(icmp_header)
-            print(udp_header)
-            print(f"Packet is from IP: {address[0]}")
-            print(f"Packet is from port: {address[1]}")
-        else:
-            print(f"{i} * * *")
+                ip_header = IPv4(buf[:20])
+                route_ip = ip_header.src
 
-    # sendsock.set_ttl(10)
-    # sendsock.sendto("whatsup?".encode(), (ip, 33434))
-    # if recvsock.recv_select():
-    #     buf, address = recvsock.recvfrom()
+                # avoid duplicate intermediate router ip
+                if route_ip not in result[ttl - 1]:
+                    result[ttl - 1].append(route_ip)
 
-    #     # Print out the packet
-    #     print(f"Packet bytes: {buf.hex()}")
-    #     print(f"Packet is from IP: {address[0]}")
-    #     print(f"Packet is from port: {address[1]}")
+                # reach destination
+                if route_ip == ip:
+                    done = True
+                    break
+
+        util.print_result(result[ttl - 1], ttl)
+        
+        if done:
+            break
+
+    return result[:ttl]
 
 if __name__ == '__main__':
     args = util.parse_args()
