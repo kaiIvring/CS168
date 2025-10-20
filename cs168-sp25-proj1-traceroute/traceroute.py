@@ -38,7 +38,19 @@ class IPv4:
     dst: str
 
     def __init__(self, buffer: bytes):
-        pass  # TODO
+        b = ''.join(format(byte, '08b') for byte in [*buffer])
+        self.version = int(b[0:4], 2)
+        self.header_len = int(b[4:8], 2) * 4 # length in bytes
+        self.tos = int(b[8:16], 2)
+        self.length = int(b[16:32], 2)
+        self.id = int(b[32:48], 2)
+        self.flags = int(b[48:51], 2)
+        self.frag_offset = int(b[51:64], 2)
+        self.ttl = int(b[64:72], 2)
+        self.proto = int(b[72:80], 2)
+        self.cksum = int(b[80:96], 2)
+        self.src = '.'.join(str(int(b[i:i+8], 2)) for i in range(96, 128, 8))
+        self.dst = '.'.join(str(int(b[i:i+8], 2)) for i in range(128, 160, 8))
 
     def __str__(self) -> str:
         return f"IPv{self.version} (tos 0x{self.tos:x}, ttl {self.ttl}, " + \
@@ -100,18 +112,42 @@ def traceroute(sendsock: util.Socket, recvsock: util.Socket, ip: str) \
     ip -- This is the IP address of the end host you will be tracerouting.
 
     Returns:
-    A list of lists representing the routers discovered for each ttl that was
-    probed.  The ith list contains all of the routers found with TTL probe of
-    i+1.   The routers discovered in the ith list can be in any order.  If no
-    routers were found, the ith list can be empty.  If `ip` is discovered, it
-    should be included as the final element in the list.
+    A list of lists representing the routers discovered for each ttl that was probed.  
+    The ith list contains all of the routers found with TTL probe of i+1.   
+    The routers discovered in the ith list can be in any order.  
+    If no routers were found, the ith list can be empty.  
+    If `ip` is discovered, it should be included as the final element in the list.
     """
 
     # TODO Add your implementation
-    for ttl in range(1, TRACEROUTE_MAX_TTL+1):
-        util.print_result([], ttl)
-    return []
+    # for ttl in range(1, TRACEROUTE_MAX_TTL+1):
+    #     util.print_result([], ttl)
+    # return []
 
+    for i in range(1, TRACEROUTE_MAX_TTL + 1):
+        sendsock.set_ttl(i)
+        sendsock.sendto("whatsup?".encode(), (ip, 33434))
+        if recvsock.recv_select():
+            buf, address = recvsock.recvfrom()
+
+            # Print out the packet
+            print(f"{i} Packet bytes: {buf.hex()}")
+            ip_header = IPv4(buf[:20])
+            print(ip_header)
+            print(f"Packet is from IP: {address[0]}")
+            print(f"Packet is from port: {address[1]}")
+        else:
+            print(f"{i} * * *")
+
+    # sendsock.set_ttl(10)
+    # sendsock.sendto("whatsup?".encode(), (ip, 33434))
+    # if recvsock.recv_select():
+    #     buf, address = recvsock.recvfrom()
+
+    #     # Print out the packet
+    #     print(f"Packet bytes: {buf.hex()}")
+    #     print(f"Packet is from IP: {address[0]}")
+    #     print(f"Packet is from port: {address[1]}")
 
 if __name__ == '__main__':
     args = util.parse_args()
