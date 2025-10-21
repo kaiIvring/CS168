@@ -107,6 +107,52 @@ class UDP:
         return f"UDP (src_port {self.src_port}, dst_port {self.dst_port}, " + \
             f"len {self.len}, cksum 0x{self.cksum:x})"
 
+def parse_packet(buf: bytes) -> tuple[str | None, bool]:
+    # Test B5: Unparseable Response
+    try:
+        # check min length
+        # Test B6: Truncated Buffer
+        if len(buf) < 20:
+            return None, False
+        
+        # try to parse IPV4
+        ip_header = IPv4(buf[:20])
+
+        # header_len larger than buf means invalid packet
+        # Test B8: IP Options
+        if ip_header.header_len > len(buf):
+            return None, False
+        
+        # only deal with ICMP protocol(proto = 1)
+        # Test B4: Invalid IP Protocol
+        # Test B7: Irrelevant UDP Respose
+        if ip_header.proto != 1:
+            return None, False
+        
+        # try to parse ICMP
+        icmp_start = ip_header.header_len
+        if len(buf) < icmp_start + 8:
+            return None, False
+        
+        icmp = ICMP(buf[icmp_start:icmp_start + 8])
+
+        # only accept type 3(destination unreachable)
+        # or type 11(TTL exceeded)
+        # Test B2: Invalid ICMP Type
+        if icmp.type not in (3, 11):
+            return None, False
+
+        # error type is "time exceeded", but the error code is 
+        # not "TTL exceeded in transit", ignore the packet
+        # Test B3: Invalid ICMP Code
+        if icmp.type == 3 and icmp.code != 0:
+            return None, False
+        
+        return ip_header.src, True
+
+    except Exception:
+        return None, False
+
 
 def traceroute(sendsock: util.Socket, recvsock: util.Socket, ip: str) \
         -> list[list[str]]:
@@ -131,15 +177,26 @@ def traceroute(sendsock: util.Socket, recvsock: util.Socket, ip: str) \
     done = False
 
     for ttl in range(1, TRACEROUTE_MAX_TTL + 1):
+        valid_count = 0
+        invalid_count = 0
+
         for attempt in range(PROBE_ATTEMPT_COUNT):
             sendsock.set_ttl(ttl)
             sendsock.sendto("whatsup?".encode(), (ip, TRACEROUTE_PORT_NUMBER))
 
             if recvsock.recv_select():
-                buf, address = recvsock.recvfrom()
+                buf, _ = recvsock.recvfrom()
+                
+                # print raw bytes of the packet
+                print(f"Packet bytes: {buf.hex()}")
 
-                ip_header = IPv4(buf[:20])
-                route_ip = ip_header.src
+                route_ip, valid = parse_packet(buf) 
+
+                if not valid:
+                    invalid_count += 1
+                    continue
+
+                valid_count += 1
 
                 # avoid duplicate intermediate router ip
                 if route_ip not in result[ttl - 1]:
@@ -149,6 +206,10 @@ def traceroute(sendsock: util.Socket, recvsock: util.Socket, ip: str) \
                 if route_ip == ip:
                     done = True
                     break
+        
+        # three attempts all receive invalid packet
+        if valid_count == 0:
+            result[ttl - 1] = []
 
         util.print_result(result[ttl - 1], ttl)
         
@@ -156,6 +217,7 @@ def traceroute(sendsock: util.Socket, recvsock: util.Socket, ip: str) \
             break
 
     return result[:ttl]
+
 
 if __name__ == '__main__':
     args = util.parse_args()
