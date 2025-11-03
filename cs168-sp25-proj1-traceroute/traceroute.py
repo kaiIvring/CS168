@@ -107,7 +107,7 @@ class UDP:
         return f"UDP (src_port {self.src_port}, dst_port {self.dst_port}, " + \
             f"len {self.len}, cksum 0x{self.cksum:x})"
 
-def parse_packet(buf: bytes, expected_src_port: int) -> tuple[str | None, bool]:
+def parse_packet(buf: bytes, expected_src_port: int, target_ip: str) -> tuple[str | None, bool]:
     # Test B5: Unparseable Response
     try:
         # check min length
@@ -153,9 +153,16 @@ def parse_packet(buf: bytes, expected_src_port: int) -> tuple[str | None, bool]:
         inner_udp_start = inner_ip_start + inner_ip.header_len
         inner_udp = UDP(buf[inner_udp_start:inner_udp_start + 8])
 
+        # Test B15: Delayed Duplicates
         # check if the inner UDP src port matches expected src port
         # avoid delayed packets from previous probes
         if inner_udp.src_port != expected_src_port:
+            return None, False
+        
+        # Test B16: Irrelevant TTL Response
+        # If the inner IP destination doesn't match the current traceroute target,
+        # this ICMP packet is from another destination, ignore it.
+        if inner_ip.dst != target_ip:
             return None, False
 
         return ip_header.src, True
@@ -207,7 +214,7 @@ def traceroute(sendsock: util.Socket, recvsock: util.Socket, ip: str) \
                 # print raw bytes of the packet
                 # print(f"Packet bytes: {buf.hex()}")
 
-                route_ip, valid = parse_packet(buf, expected_src_port = src_port) 
+                route_ip, valid = parse_packet(buf, expected_src_port = src_port, target_ip = ip) 
 
                 if not valid:
                     invalid_count += 1
