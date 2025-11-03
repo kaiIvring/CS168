@@ -107,7 +107,7 @@ class UDP:
         return f"UDP (src_port {self.src_port}, dst_port {self.dst_port}, " + \
             f"len {self.len}, cksum 0x{self.cksum:x})"
 
-def parse_packet(buf: bytes) -> tuple[str | None, bool]:
+def parse_packet(buf: bytes, expected_src_port: int) -> tuple[str | None, bool]:
     # Test B5: Unparseable Response
     try:
         # check min length
@@ -148,6 +148,16 @@ def parse_packet(buf: bytes) -> tuple[str | None, bool]:
         if icmp.type == 3 and icmp.code != 0:
             return None, False
         
+        inner_ip_start = icmp_start + 8
+        inner_ip = IPv4(buf[inner_ip_start:inner_ip_start + 20])
+        inner_udp_start = inner_ip_start + inner_ip.header_len
+        inner_udp = UDP(buf[inner_udp_start:inner_udp_start + 8])
+
+        # check if the inner UDP src port matches expected src port
+        # avoid delayed packets from previous probes
+        if inner_udp.src_port != expected_src_port:
+            return None, False
+
         return ip_header.src, True
 
     except Exception:
@@ -175,12 +185,19 @@ def traceroute(sendsock: util.Socket, recvsock: util.Socket, ip: str) \
     """
     result = [[] for _ in range(TRACEROUTE_MAX_TTL)]
     done = False
+    BASE_SRC_PORT = 33434
 
     for ttl in range(1, TRACEROUTE_MAX_TTL + 1):
         valid_count = 0
         invalid_count = 0
 
         for attempt in range(PROBE_ATTEMPT_COUNT):
+            # for every TTL outgoing packet, use a unique source port
+            # so that we can detect delayed packets from previous probes
+            src_port = BASE_SRC_PORT + ttl
+            sendsock = util.Socket.make_udp()
+            sendsock._Socket__sock.bind(('0.0.0.0', src_port))
+
             sendsock.set_ttl(ttl)
             sendsock.sendto("whatsup?".encode(), (ip, TRACEROUTE_PORT_NUMBER))
 
@@ -188,9 +205,9 @@ def traceroute(sendsock: util.Socket, recvsock: util.Socket, ip: str) \
                 buf, _ = recvsock.recvfrom()
                 
                 # print raw bytes of the packet
-                print(f"Packet bytes: {buf.hex()}")
+                # print(f"Packet bytes: {buf.hex()}")
 
-                route_ip, valid = parse_packet(buf) 
+                route_ip, valid = parse_packet(buf, expected_src_port = src_port) 
 
                 if not valid:
                     invalid_count += 1
