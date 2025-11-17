@@ -77,7 +77,12 @@ class DVRouter(DVRouterBase):
         assert port in self.ports.get_all_ports(), "Link should be up, but is not."
 
         ##### Begin Stage 1 #####
-
+        self.table[host] = TableEntry(
+            dst = host,
+            port = port,
+            latency = self.ports.get_latency(port),
+            expire_time = FOREVER
+        )
         ##### End Stage 1 #####
 
     def handle_data_packet(self, packet, in_port):
@@ -90,9 +95,30 @@ class DVRouter(DVRouterBase):
         :param in_port: the port from which the packet arrived.
         :return: nothing.
         """
-        
         ##### Begin Stage 2 #####
+        dst = packet.dst
 
+        # if the destination does not exsit, drop
+        if dst not in self.table:
+            return
+        
+        entry = self.table[dst]
+        # if next hop port is invalid, drop
+        if entry.port is None:
+            return
+
+        # avoid forwarding to the in_port
+        if entry.port == in_port:
+            return
+
+        # if the latency is greater than or equal to INFINITY, drop
+        if entry.latency >= INFINITY:
+            return
+        
+        # normal forward
+        self.send(packet, port = entry.port)
+        
+        
         ##### End Stage 2 #####
 
     def send_routes(self, force=False, single_port=None):
