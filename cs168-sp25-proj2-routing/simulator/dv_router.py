@@ -161,6 +161,32 @@ class DVRouter(DVRouterBase):
         """
         
         ##### Begin Stages 4, 10 #####
+        new_cost = self.ports.get_latency(port) + route_latency
+        expire = api.current_time() + self.ROUTE_TTL
+
+        # new destination, add to the table
+        if route_dst not in self.table:
+            self.table[route_dst] = TableEntry(
+                dst = route_dst,
+                port = port,
+                latency = new_cost,
+                expire_time = expire
+            ) 
+            return
+        
+        entry = self.table[route_dst]
+
+        # advertisement from current next-hop
+        # or
+        # new path is better
+        if entry.port == port or new_cost < entry.latency:
+            self.table[route_dst] = TableEntry(
+                dst = route_dst,
+                port = port,
+                latency = new_cost,
+                expire_time = expire
+            ) 
+            return
 
         ##### End Stages 4, 10 #####
 
