@@ -134,6 +134,9 @@ class DVRouter(DVRouterBase):
         """
         
         ##### Begin Stages 3, 6, 7, 8, 10 #####
+        for dst, entry in self.table.items():
+            for port in self.ports.get_all_ports():
+                self.send_route(port, dst, entry.latency)
 
         ##### End Stages 3, 6, 7, 8, 10 #####
 
