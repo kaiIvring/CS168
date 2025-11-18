@@ -147,6 +147,11 @@ class DVRouter(DVRouterBase):
         """
         
         ##### Begin Stages 5, 9 #####
+        expired = [dst for dst, entry in self.table.items() \
+                   if entry.expire_time < api.current_time() ]
+        for dst in expired:
+            self.table.pop(dst)
+            self.log("Link down", level = "debug")
 
         ##### End Stages 5, 9 #####
 
