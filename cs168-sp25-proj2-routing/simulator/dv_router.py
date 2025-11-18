@@ -25,7 +25,7 @@ class DVRouter(DVRouterBase):
     # -----------------------------------------------
     # At most one of these should ever be on at once
     SPLIT_HORIZON = False
-    POISON_REVERSE = False
+    POISON_REVERSE = True
     # -----------------------------------------------
 
     # Determines if you send poison for expired routes
@@ -140,7 +140,7 @@ class DVRouter(DVRouterBase):
             for dst, entry in self.table.items():
 
                 # only one of "pr" and "sh" can be true
-                # Poison reverse
+                # Poison Reverse
                 if self.POISON_REVERSE and entry.port == port:
                     self.send_route(port, dst, INFINITY)
                     continue
@@ -167,9 +167,23 @@ class DVRouter(DVRouterBase):
         ##### Begin Stages 5, 9 #####
         expired = [dst for dst, entry in self.table.items() \
                    if entry.expire_time < api.current_time() ]
+        
         for dst in expired:
-            self.table.pop(dst)
-            self.log("Link down", level = "debug")
+            entry = self.table[dst]
+
+            # poison expired routes if enabled
+            if self.POISON_EXPIRED:
+                self.table[dst] = TableEntry(
+                    dst = dst,
+                    port = entry.port,
+                    latency = INFINITY,
+                    expire_time = api.current_time() + self.ROUTE_TTL
+                )
+                self.log(f"Route to {dst} expired -> POISONED", level = "debug")
+            # normal behavior - delete expired routes
+            else:
+                self.table.pop(dst)
+                self.log(f"Route to {dst} expired -> DELETED", level = "debug")
 
         ##### End Stages 5, 9 #####
 
