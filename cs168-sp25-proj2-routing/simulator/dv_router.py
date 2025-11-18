@@ -24,7 +24,7 @@ class DVRouter(DVRouterBase):
 
     # -----------------------------------------------
     # At most one of these should ever be on at once
-    SPLIT_HORIZON = False
+    SPLIT_HORIZON = True
     POISON_REVERSE = False
     # -----------------------------------------------
 
@@ -136,6 +136,8 @@ class DVRouter(DVRouterBase):
         ##### Begin Stages 3, 6, 7, 8, 10 #####
         for dst, entry in self.table.items():
             for port in self.ports.get_all_ports():
+                if entry.port == port and self.SPLIT_HORIZON:
+                    continue
                 self.send_route(port, dst, entry.latency)
 
         ##### End Stages 3, 6, 7, 8, 10 #####
