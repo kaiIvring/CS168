@@ -24,8 +24,8 @@ class DVRouter(DVRouterBase):
 
     # -----------------------------------------------
     # At most one of these should ever be on at once
-    SPLIT_HORIZON = True
-    POISON_REVERSE = False
+    SPLIT_HORIZON = False
+    POISON_REVERSE = True
     # -----------------------------------------------
 
     # Determines if you send poison for expired routes
@@ -137,6 +137,9 @@ class DVRouter(DVRouterBase):
         for dst, entry in self.table.items():
             for port in self.ports.get_all_ports():
                 if entry.port == port and self.SPLIT_HORIZON:
+                    continue
+                if entry.port == port and self.POISON_REVERSE:
+                    self.send_route(port, dst, INFINITY)
                     continue
                 self.send_route(port, dst, entry.latency)
 
